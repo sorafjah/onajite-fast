@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>同じ手のカタチをだそうゲーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation; /* ダブルタップによるズームを無効化 */
+        }
+        .hand-display {
+            font-size: 8rem; /* 絵文字のサイズを大きく */
+            line-height: 1;
+            user-select: none; /* テキスト選択を無効化 */
+            -webkit-user-select: none; /* Safari用 */
+            -moz-user-select: none; /* Firefox用 */
+            -ms-user-select: none; /* IE用 */
+            transition: transform 0.1s ease-out; /* アニメーション用のトランジション */
+        }
+        .hand-display.pop {
+            animation: pop 0.2s ease-out;
+        }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .game-container {
+            width: 100%;
+            max-width: 500px; /* 最大幅を設定 */
+            margin: auto;
+            padding: 1rem;
+        }
+        .hand-area {
+            background-color: #f3f4f6; /* 薄いグレーの背景 */
+            border-radius: 0.75rem; /* 角を丸く */
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px; /* 手の表示エリアの最小の高さを確保 */
+        }
+        .action-button { /* ボタン共通のスタイル */
+            color: white;
+            font-weight: bold;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.3s;
+            width: 100%; /* ボタン幅を親要素に合わせる */
+            margin-bottom: 0.75rem; /* ボタン間のマージン */
+        }
+        .action-button:last-child {
+            margin-bottom: 0;
+        }
+        .start-button {
+            background-color: #10b981; /* 緑系の背景 (Tailwind green-500) */
+        }
+        .start-button:hover {
+            background-color: #059669; /* Tailwind green-600 */
+        }
+        .reset-button {
+            background-color: #0ea5e9; /* 水色系の背景 (Tailwind sky-500) に変更 */
+        }
+        .reset-button:hover {
+            background-color: #0284c7; /* Tailwind sky-600 に変更 */
+        }
+        /* 追加: 速度切り替えボタンのスタイル */
+        .speed-button {
+            background-color: #f97316; /* オレンジ (Tailwind orange-500) */
+        }
+        .speed-button:hover {
+            background-color: #ea580c; /* 濃いオレンジ (Tailwind orange-600) */
+        }
+        .count-display {
+            color: #4b5563; /* やや濃いグレーの文字色 (Tailwind gray-600) */
+        }
+        .title {
+            color: #374151; /* 濃いグレーの文字色 (Tailwind gray-700) */
+            font-weight: bold;
+            font-size: 1.875rem; /* Tailwindのtext-3xl相当 */
+            margin-bottom: 1.5rem;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-600 to-blue-500 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl game-container">
+        <h1 id="gameTitle" class="title text-center">おなじものをだそう</h1>
+        <div id="handArea" class="hand-area">
+            <span id="handDisplay" class="hand-display">✌️</span>
+        </div>
+
+        <div id="gameControls" class="mt-4">
+            <p id="countDisplay" class="count-display text-lg text-center mb-4">表示回数: 0</p>
+            <button id="startButton" class="action-button start-button">スタート</button>
+            <button id="speedToggleButton" class="action-button speed-button">はやいへ</button>
+            <button id="resetButton" class="action-button reset-button hidden">リセット</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const handDisplay = document.getElementById('handDisplay');
+        const countDisplay = document.getElementById('countDisplay');
+        const resetButton = document.getElementById('resetButton');
+        const startButton = document.getElementById('startButton');
+        const gameTitleElement = document.getElementById('gameTitle');
+        // ▼▼▼ 速度変更ボタンを取得 ▼▼▼
+        const speedToggleButton = document.getElementById('speedToggleButton');
+
+
+        // 定数
+        const HANDS = ["✊", "✌️", "✋"]; // 通常の手
+        const SURPRISE_HANDS = ["👌", "👍", "👎", "👈", "👉", "👆", "👇", "👋", "🤙", "🤘", "🤞", "🖖", "🤟"]; // サプライズの手
+        const INITIAL_HAND_DISPLAY = "✌️";
+        // ▼▼▼ 速度の定数を定義 ▼▼▼
+        const NORMAL_INTERVAL = 1000; // ふつう: 1秒
+        const FAST_INTERVAL = 500;   // はやい: 0.5秒
+        const SURPRISE_PAUSE_DURATION = 3000;
+        const SURPRISE_PROBABILITY = 0.2;
+
+        const APP_INITIAL_TITLE_TEXT = "おなじものをだそう";
+        const NORMAL_PLAY_TEXT = "おなじものをだそう";
+        const SURPRISE_PLAY_TEXT = "おなじのできた！？";
+
+        // ゲーム状態変数
+        let displayCount = 0;
+        let gameStarted = false;
+        let autoChangeIntervalId = null;
+        let surprisePauseTimeoutId = null;
+        let isSurpriseActive = false;
+        // ▼▼▼ 現在の速度を保持する変数を追加 ▼▼▼
+        let currentInterval = NORMAL_INTERVAL;
+
+        // 初期状態を設定する関数
+        function initializeGame() {
+            gameStarted = false;
+            isSurpriseActive = false;
+
+            clearInterval(autoChangeIntervalId);
+            clearTimeout(surprisePauseTimeoutId);
+            autoChangeIntervalId = null;
+            surprisePauseTimeoutId = null;
+
+            handDisplay.textContent = INITIAL_HAND_DISPLAY;
+            handDisplay.classList.remove('pop');
+            displayCount = 0;
+            countDisplay.textContent = `表示回数: ${displayCount}`;
+            gameTitleElement.textContent = APP_INITIAL_TITLE_TEXT;
+
+            startButton.classList.remove('hidden');
+            resetButton.classList.add('hidden');
+            // ▼▼▼ 速度切り替えボタンも表示し、設定をリセット ▼▼▼
+            speedToggleButton.classList.remove('hidden');
+            currentInterval = NORMAL_INTERVAL;
+            speedToggleButton.textContent = 'はやいへ';
+        }
+
+        // 手をランダムに表示し、ゲームロジックを処理する関数
+        function changeHand() {
+            if (!gameStarted || isSurpriseActive) {
+                return;
+            }
+
+            displayCount++;
+            countDisplay.textContent = `表示回数: ${displayCount}`;
+
+            handDisplay.classList.remove('pop');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    handDisplay.classList.add('pop');
+                });
+            });
+
+            const showSurprise = Math.random() < SURPRISE_PROBABILITY;
+
+            if (showSurprise) {
+                const randomSurpriseIndex = Math.floor(Math.random() * SURPRISE_HANDS.length);
+                handDisplay.textContent = SURPRISE_HANDS[randomSurpriseIndex];
+                gameTitleElement.textContent = SURPRISE_PLAY_TEXT;
+                isSurpriseActive = true;
+
+                surprisePauseTimeoutId = setTimeout(() => {
+                    isSurpriseActive = false;
+                }, SURPRISE_PAUSE_DURATION);
+            } else {
+                const randomIndex = Math.floor(Math.random() * HANDS.length);
+                handDisplay.textContent = HANDS[randomIndex];
+                gameTitleElement.textContent = NORMAL_PLAY_TEXT;
+            }
+        }
+        
+        // タイマーを開始または再開する関数
+        function startTimer() {
+            if (autoChangeIntervalId) clearInterval(autoChangeIntervalId);
+            // ▼▼▼ 現在の速度設定(currentInterval)でタイマーを開始 ▼▼▼
+            autoChangeIntervalId = setInterval(changeHand, currentInterval);
+        }
+
+        // スタートボタンのイベントリスナー
+        startButton.addEventListener('click', () => {
+            if (gameStarted) return;
+
+            gameStarted = true;
+            startButton.classList.add('hidden');
+            // ▼▼▼ 速度変更ボタンも非表示にする ▼▼▼
+            speedToggleButton.classList.add('hidden');
+            resetButton.classList.remove('hidden');
+
+            changeHand();
+            // ▼▼▼ タイマー開始関数を呼び出す ▼▼▼
+            startTimer();
+        });
+        
+        // ▼▼▼ 速度切り替えボタンのイベントリスナーを追加 ▼▼▼
+        speedToggleButton.addEventListener('click', () => {
+            if (currentInterval === NORMAL_INTERVAL) {
+                currentInterval = FAST_INTERVAL;
+                speedToggleButton.textContent = 'ふつうへ';
+            } else {
+                currentInterval = NORMAL_INTERVAL;
+                speedToggleButton.textContent = 'はやいへ';
+            }
+        });
+
+        // リセットボタンのイベントリスナー
+        resetButton.addEventListener('click', () => {
+            initializeGame();
+        });
+
+        // popアニメーション終了時にクラスを削除する
+        handDisplay.addEventListener('animationend', () => {
+            handDisplay.classList.remove('pop');
+        });
+
+        // ページ読み込み時にゲームを初期化
+        initializeGame();
+    </script>
+
+</body>
+</html>
