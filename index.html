@@ -43,17 +43,14 @@
             align-items: center;
             min-height: 200px; /* 手の表示エリアの最小の高さを確保 */
         }
-        .action-button { /* ボタン共通のスタイル */
+        /* ▼▼▼ ボタンの横幅とマージンを調整 ▼▼▼ */
+        .action-button {
             color: white;
             font-weight: bold;
             padding: 0.75rem 1.5rem;
             border-radius: 0.5rem;
             transition: background-color 0.3s;
-            width: 100%; /* ボタン幅を親要素に合わせる */
-            margin-bottom: 0.75rem; /* ボタン間のマージン */
-        }
-        .action-button:last-child {
-            margin-bottom: 0;
+            /* width と margin-bottom はFlexboxで制御するため削除 */
         }
         .start-button {
             background-color: #10b981; /* 緑系の背景 (Tailwind green-500) */
@@ -61,18 +58,11 @@
         .start-button:hover {
             background-color: #059669; /* Tailwind green-600 */
         }
-        .reset-button {
-            background-color: #0ea5e9; /* 水色系の背景 (Tailwind sky-500) に変更 */
+        .reset-button, .speed-button {
+            background-color: #0ea5e9; /* 水色系の背景 (Tailwind sky-500) */
         }
-        .reset-button:hover {
-            background-color: #0284c7; /* Tailwind sky-600 に変更 */
-        }
-        /* 追加: 速度切り替えボタンのスタイル */
-        .speed-button {
-            background-color: #f97316; /* オレンジ (Tailwind orange-500) */
-        }
-        .speed-button:hover {
-            background-color: #ea580c; /* 濃いオレンジ (Tailwind orange-600) */
+        .reset-button:hover, .speed-button:hover {
+            background-color: #0284c7; /* Tailwind sky-600 */
         }
         .count-display {
             color: #4b5563; /* やや濃いグレーの文字色 (Tailwind gray-600) */
@@ -98,9 +88,12 @@
 
         <div id="gameControls" class="mt-4">
             <p id="countDisplay" class="count-display text-lg text-center mb-4">表示回数: 0</p>
-            <button id="startButton" class="action-button start-button">スタート</button>
-            <button id="speedToggleButton" class="action-button speed-button">はやいへ</button>
-            <button id="resetButton" class="action-button reset-button hidden">リセット</button>
+            <!-- ▼▼▼ ボタンをFlexboxで横並びに配置 ▼▼▼ -->
+            <div class="flex w-full gap-2">
+                 <button id="startButton" class="action-button start-button w-1/2">スタート</button>
+                 <button id="resetButton" class="action-button reset-button w-1/2 hidden">リセット</button>
+                 <button id="speedToggleButton" class="action-button speed-button w-1/2">はやく</button>
+            </div>
         </div>
     </div>
 
@@ -111,7 +104,6 @@
         const resetButton = document.getElementById('resetButton');
         const startButton = document.getElementById('startButton');
         const gameTitleElement = document.getElementById('gameTitle');
-        // ▼▼▼ 速度変更ボタンを取得 ▼▼▼
         const speedToggleButton = document.getElementById('speedToggleButton');
 
 
@@ -119,10 +111,9 @@
         const HANDS = ["✊", "✌️", "✋"]; // 通常の手
         const SURPRISE_HANDS = ["👌", "👍", "👎", "👈", "👉", "👆", "👇", "👋", "🤙", "🤘", "🤞", "🖖", "🤟"]; // サプライズの手
         const INITIAL_HAND_DISPLAY = "✌️";
-        // ▼▼▼ 速度の定数を定義 ▼▼▼
         const NORMAL_INTERVAL = 1000; // ふつう: 1秒
         const FAST_INTERVAL = 500;   // はやい: 0.5秒
-        const SURPRISE_PAUSE_DURATION = 3000;
+        const NORMAL_SURPRISE_PAUSE_DURATION = 3000; // ふつうモードでのサプライズ停止時間
         const SURPRISE_PROBABILITY = 0.2;
 
         const APP_INITIAL_TITLE_TEXT = "おなじものをだそう";
@@ -135,7 +126,6 @@
         let autoChangeIntervalId = null;
         let surprisePauseTimeoutId = null;
         let isSurpriseActive = false;
-        // ▼▼▼ 現在の速度を保持する変数を追加 ▼▼▼
         let currentInterval = NORMAL_INTERVAL;
 
         // 初期状態を設定する関数
@@ -154,12 +144,13 @@
             countDisplay.textContent = `表示回数: ${displayCount}`;
             gameTitleElement.textContent = APP_INITIAL_TITLE_TEXT;
 
+            // ボタンの表示/非表示を制御
             startButton.classList.remove('hidden');
             resetButton.classList.add('hidden');
-            // ▼▼▼ 速度切り替えボタンも表示し、設定をリセット ▼▼▼
             speedToggleButton.classList.remove('hidden');
+            
             currentInterval = NORMAL_INTERVAL;
-            speedToggleButton.textContent = 'はやいへ';
+            speedToggleButton.textContent = 'はやく';
         }
 
         // 手をランダムに表示し、ゲームロジックを処理する関数
@@ -186,9 +177,14 @@
                 gameTitleElement.textContent = SURPRISE_PLAY_TEXT;
                 isSurpriseActive = true;
 
+                const surpriseDuration = (currentInterval === FAST_INTERVAL) 
+                    ? FAST_INTERVAL 
+                    : NORMAL_SURPRISE_PAUSE_DURATION;
+
                 surprisePauseTimeoutId = setTimeout(() => {
                     isSurpriseActive = false;
-                }, SURPRISE_PAUSE_DURATION);
+                }, surpriseDuration);
+
             } else {
                 const randomIndex = Math.floor(Math.random() * HANDS.length);
                 handDisplay.textContent = HANDS[randomIndex];
@@ -199,7 +195,6 @@
         // タイマーを開始または再開する関数
         function startTimer() {
             if (autoChangeIntervalId) clearInterval(autoChangeIntervalId);
-            // ▼▼▼ 現在の速度設定(currentInterval)でタイマーを開始 ▼▼▼
             autoChangeIntervalId = setInterval(changeHand, currentInterval);
         }
 
@@ -208,24 +203,29 @@
             if (gameStarted) return;
 
             gameStarted = true;
+            // スタートボタンを隠し、リセットボタンを表示
             startButton.classList.add('hidden');
-            // ▼▼▼ 速度変更ボタンも非表示にする ▼▼▼
-            speedToggleButton.classList.add('hidden');
             resetButton.classList.remove('hidden');
+            // ▼▼▼ 速度ボタンは表示したままにする ▼▼▼
+            // speedToggleButton.classList.add('hidden'); // この行を削除
 
             changeHand();
-            // ▼▼▼ タイマー開始関数を呼び出す ▼▼▼
             startTimer();
         });
         
-        // ▼▼▼ 速度切り替えボタンのイベントリスナーを追加 ▼▼▼
+        // 速度切り替えボタンのイベントリスナー
         speedToggleButton.addEventListener('click', () => {
             if (currentInterval === NORMAL_INTERVAL) {
                 currentInterval = FAST_INTERVAL;
-                speedToggleButton.textContent = 'ふつうへ';
+                speedToggleButton.textContent = 'ふつうに';
             } else {
                 currentInterval = NORMAL_INTERVAL;
-                speedToggleButton.textContent = 'はやいへ';
+                speedToggleButton.textContent = 'はやく';
+            }
+            
+            // ▼▼▼ ゲームが始まっている場合、速度の変更を即時反映する ▼▼▼
+            if (gameStarted) {
+                startTimer();
             }
         });
 
